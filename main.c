@@ -3,6 +3,20 @@
 #include <malloc.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <pthread.h>
+#include <unistd.h>
+
+
+typedef struct matricesData {
+    int** matrixA;
+    int** matrixB ;
+
+    int ra;
+    int ca;
+    int rb;
+    int cb;
+}MatricesData;
+
 
 int getDim(char* str)
 {
@@ -52,30 +66,63 @@ void getDimensions(char* filename , int* row ,int* column) {
     }
     fclose(fp);
 }
-int** readFromFile(char* filename , int row ,int column){
+int** readFromFile(char* filename , int row ,int column) {
     FILE *fp = fopen(filename, "r");
     const unsigned MAX_LENGTH = 1024;
     char buffer[MAX_LENGTH];
 
-    int** matrix = (int**)malloc(row * sizeof(int*));
+    int **matrix = (int **) malloc(row * sizeof(int *));
     for (int i = 0; i < row; i++)
-        matrix[i] = (int*)malloc(column * sizeof(int));
+        matrix[i] = (int *) malloc(column * sizeof(int));
 
     //move pointer (ignore row and column) already read it
     fgets(buffer, MAX_LENGTH, fp);
-    for(int i=0;i<row;i++){
-        for(int j=0;j<column;j++){
-            if(fscanf(fp,"%s ", buffer)>0) {
-               matrix[i][j]=getElement(buffer);
-           }
-       }
+    for (int i = 0; i < row; i++) {
+        for (int j = 0; j < column; j++) {
+            if (fscanf(fp, "%s ", buffer) > 0) {
+                matrix[i][j] = getElement(buffer);
+            }
+        }
     }
     fclose(fp);
     return matrix;
 
 }
+MatricesData* generateMatricesData(char** filenames){
+
+    int ra;
+    int ca;
+    int rb;
+    int cb;
+    MatricesData* matricesData= malloc(sizeof (MatricesData));
+
+    getDimensions(filenames[0],&ra,&ca);
+    matricesData->ra=ra;
+    matricesData->ca=ca;
+    matricesData->matrixA = readFromFile(filenames[0],ra,ca);
+    getDimensions(filenames[1],&rb,&cb);
+    matricesData->rb=rb;
+    matricesData->cb=cb;
+    matricesData->matrixB = readFromFile(filenames[0],rb,cb);
+
+    return matricesData;
+}
+void* print(void* arg)
+{
+    MatricesData* matricesData=(MatricesData*) arg;
+    for (int i = 0; i < matricesData->ra; i++) {
+        for (int j = 0; j <matricesData-> ca; j++)
+            printf("%d ",matricesData->matrixA[i][j]);
+        printf("\n");
+    }
 
 
+    for (int i = 0; i < matricesData->rb; i++) {
+        for (int j = 0; j < matricesData->cb; j++)
+            printf("%d ",matricesData->matrixB[i][j]);
+        printf("\n");
+    }
+}
 int main(int argc, char **argv)
 {
     if(argc>4)
@@ -96,13 +143,13 @@ int main(int argc, char **argv)
     for(int i=0;i<3;i++){
         strncat(filenames[i],".txt",4);
     }
-    int ra;
-    int ca;
-    int rb;
-    int cb;
-    getDimensions(filenames[0],&ra,&ca);
-    int** matrixA = readFromFile(filenames[0],ra,ca);
 
+    MatricesData* matricesData = generateMatricesData(filenames);
+//    getDimensions(filenames[0],&ra,&ca);
+//    int** matrixA = readFromFile(filenames[0],ra,ca);
+//    getDimensions(filenames[1],&rb,&cb);
+//    int** matrixB = readFromFile(filenames[0],rb,cb);
+/*
     for (int i = 0; i < ra; i++) {
         for (int j = 0; j < ca; j++)
             printf("%d ",matrixA[i][j]);
@@ -116,5 +163,12 @@ int main(int argc, char **argv)
             printf("%d ",matrixB[i][j]);
         printf("\n");
     }
+*/
+    pthread_t threads[matricesData->ra*matricesData->cb+matricesData->ra+1]; //each element +each row+whole
+    int threadIndex=0;
+    pthread_create(&threads[0], NULL, print,(void*)matricesData);
+
+    pthread_join(threads[0],NULL);
+
     return 0;
 }
