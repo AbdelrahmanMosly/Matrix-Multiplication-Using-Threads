@@ -11,6 +11,7 @@ typedef struct matricesData {
     int** matrixA;
     int** matrixB ;
 
+    int elementToWorkOn;
     int rowToWorkOn;
     int ra;
     int ca;
@@ -93,6 +94,22 @@ int** readFromFile(char* filename , int row ,int column) {
     return matrix;
 
 }
+
+
+void writeToFile(char* filename,int** matrixC,char* method , int row ,int column) {
+    strcat(filename,method);
+    FILE *fp = fopen(filename, "w");
+
+    for (int i = 0; i <row; i++) {
+        for (int j = 0; j <column; j++)
+            fprintf(fp,"%d ",matrixC[i][j]);
+        fprintf(fp,"\n");
+    }
+    fclose(fp);
+}
+
+
+
 MatricesData* generateMatricesData(char** filenames){
 
     int ra;
@@ -140,12 +157,12 @@ void* multiplyWhole(void * arg){
         }
     }
 }
-pthread_mutex_t mutex;
+pthread_mutex_t mutexRow;
 void* multiplyRow(void * arg){
     MatricesData* matricesData=(MatricesData*) arg;
-    pthread_mutex_lock(&mutex);
+    pthread_mutex_lock(&mutexRow);
     int i=matricesData->rowToWorkOn++;
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&mutexRow);
     for (int j = 0; j <matricesData-> cb; j++){
         matrixCRowThread[i][j] = 0;
 
@@ -153,6 +170,25 @@ void* multiplyRow(void * arg){
             matrixCRowThread[i][j] += matricesData->matrixA[i][k] * matricesData->matrixB[k][j];
     }
 }
+pthread_mutex_t mutexElement;
+void* multiplyElement(void * arg){
+    MatricesData* matricesData=(MatricesData*) arg;
+    pthread_mutex_lock(&mutexElement);
+    int i=matricesData->elementToWorkOn++;
+    pthread_mutex_unlock(&mutexElement);
+    //used one index to indicate i and j to make locked fast as possible
+    //contain less operation
+    int elementi=i/matricesData->ra;
+    int elementj=i%matricesData->ra;
+
+    matrixCElementThread[elementi][elementj] = 0;
+
+    for (int k = 0; k < matricesData-> rb; k++)
+        matrixCElementThread[elementi][elementj] += matricesData->matrixA[elementi][k] * matricesData->matrixB[k][elementj];
+
+}
+
+
 int main(int argc, char **argv)
 {
     if(argc>4)
@@ -160,22 +196,25 @@ int main(int argc, char **argv)
         printf("Error to many arguments");
         return 1;
     }
-    char** filenames = malloc(sizeof (char *) *3);
+    char** filenames = malloc(sizeof (char *) *4);
     filenames[0]= malloc(sizeof (char)*128);
     filenames[1]= malloc(sizeof (char)*128);
     filenames[2]= malloc(sizeof (char)*128);
+    filenames[3]= malloc(sizeof (char)*128);
     strcpy(filenames[0],"a");
     strcpy(filenames[1],"b");
     strcpy(filenames[2],"c");
     for(int i=1;i<argc ;i++){
         strcpy(filenames[i-1],argv[i]);
     }
-    for(int i=0;i<3;i++){
+    for(int i=0;i<2;i++){
         strncat(filenames[i],".txt",4);
     }
 
     MatricesData* matricesData = generateMatricesData(filenames);
-    pthread_t threads[matricesData->ra*matricesData->cb+matricesData->ra+1]; //each element +each row+whole
+    int ra=matricesData->ra;
+    int cb=matricesData->cb;
+    pthread_t threads[ra*cb+ra+1]; //each element +each row+whole
 
     matrixCWhole= allocateMatrixC(matricesData);
     matrixCRowThread= allocateMatrixC(matricesData);
@@ -183,13 +222,26 @@ int main(int argc, char **argv)
 
     int threadIndex=0;
     pthread_create(&threads[threadIndex++], NULL, multiplyWhole,(void*)matricesData);
-    while (threadIndex<matricesData->ra+1){
+    matricesData->rowToWorkOn=0;
+    while (threadIndex<ra+1){
         pthread_create(&threads[threadIndex++], NULL, multiplyRow,(void*)matricesData);
     }
-
+    matricesData->elementToWorkOn=0;
+    while (threadIndex<ra*cb+ra+1){
+        pthread_create(&threads[threadIndex++], NULL, multiplyElement,(void*)matricesData);
+    }
     threadIndex--;
     while (threadIndex>=0)
         pthread_join(threads[threadIndex--],NULL);
+
+
+    strcpy(filenames[3],filenames[2]);
+    writeToFile(filenames[2],matrixCWhole ,"_per_matrix",ra,cb);
+    strcpy(filenames[2],filenames[3]);
+    writeToFile(filenames[3],matrixCRowThread ,"_per_row",ra,cb);
+    writeToFile(filenames[2],matrixCElementThread ,"_per_element",ra,cb);
+
+
 
     printf("results one thread :////////////////////\n");
     printMatrixC(matrixCWhole,matricesData);
