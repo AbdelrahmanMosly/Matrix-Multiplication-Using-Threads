@@ -13,10 +13,10 @@ typedef struct matricesData {
 
     int elementToWorkOn;
     int rowToWorkOn;
-    int ra;
-    int ca;
-    int rb;
-    int cb;
+    int* ra;
+    int* ca;
+    int* rb;
+    int* cb;
 }MatricesData;
 
 int** matrixCWhole;
@@ -118,41 +118,48 @@ MatricesData generateMatricesData(char** filenames){
     int cb;
     MatricesData matricesData;
 
-    getDimensions(filenames[0],&ra,&ca);
-    matricesData.ra=ra;
-    matricesData.ca=ca;
     matricesData.matrixA= malloc(sizeof (int **));
+    matricesData.matrixB= malloc(sizeof (int **));
+    matricesData.ra= malloc(sizeof (int ));
+    matricesData.ca= malloc(sizeof (int ));
+    matricesData.rb= malloc(sizeof(int ));
+    matricesData.cb= malloc(sizeof (int ));
+
+    getDimensions(filenames[0],&ra,&ca);
+    *matricesData.ra=ra;
+    *matricesData.ca=ca;
     *matricesData.matrixA = readFromFile(filenames[0],ra,ca);
     getDimensions(filenames[1],&rb,&cb);
-    matricesData.rb=rb;
-    matricesData.cb=cb;
-    matricesData.matrixB= malloc(sizeof (int **));
+    *matricesData.rb=rb;
+    *matricesData.cb=cb;
     *matricesData.matrixB = readFromFile(filenames[0],rb,cb);
+    matricesData.elementToWorkOn=0;
+    matricesData.rowToWorkOn=0;
 
     return matricesData;
 }
 void printMatrixC(int** matrixC,MatricesData matricesData)
 {
-    for (int i = 0; i < matricesData.ra; i++) {
-        for (int j = 0; j <matricesData.cb; j++)
+    for (int i = 0; i < *matricesData.ra; i++) {
+        for (int j = 0; j < *matricesData.cb; j++)
             printf("%d ",matrixC[i][j]);
         printf("\n");
     }
 }
 int** allocateMatrixC(MatricesData matricesData) {
-    int** arr = (int**)malloc(matricesData.ra * sizeof(int*));
-    for (int i = 0; i < matricesData.ra; i++)
-        arr[i] = (int*)malloc(matricesData.cb * sizeof(int));
+    int** arr = (int**)malloc(*matricesData.ra * sizeof(int*));
+    for (int i = 0; i < *matricesData.ra; i++)
+        arr[i] = (int*)malloc(*matricesData.cb * sizeof(int));
     return arr;
 }
 
 void* multiplyWhole(void * arg){
     MatricesData* matricesData=(MatricesData*) arg;
-    for (int i = 0; i < matricesData->ra; i++) {
-        for (int j = 0; j <matricesData-> cb; j++){
+    for (int i = 0; i < *matricesData->ra; i++) {
+        for (int j = 0; j <*matricesData-> cb; j++){
             matrixCWhole[i][j] = 0;
 
-            for (int k = 0; k < matricesData-> rb; k++)
+            for (int k = 0; k < *matricesData-> rb; k++)
                 matrixCWhole[i][j] += (*matricesData->matrixA)[i][k]* (*matricesData->matrixB)[k][j];
 
 
@@ -162,22 +169,22 @@ void* multiplyWhole(void * arg){
 void* multiplyRow(void * arg){
     MatricesData* matricesData=(MatricesData*) arg;
     int i=matricesData->rowToWorkOn;
-    for (int j = 0; j <matricesData-> cb; j++){
+    for (int j = 0; j < *matricesData-> cb; j++){
         matrixCRowThread[i][j] = 0;
 
-        for (int k = 0; k < matricesData-> rb; k++)
+        for (int k = 0; k < *matricesData-> rb; k++)
             matrixCRowThread[i][j] += (*matricesData->matrixA)[i][k] * (*matricesData->matrixB)[k][j];
     }
 }
 void* multiplyElement(void * arg){
     MatricesData* matricesData=(MatricesData*) arg;
     int i=matricesData->elementToWorkOn;
-    int elementi=i/matricesData->ra;
-    int elementj=i%matricesData->ra;
+    int elementi=i/(*matricesData->ra);
+    int elementj=i%(*matricesData->ra);
 
     matrixCElementThread[elementi][elementj] = 0;
 
-    for (int k = 0; k < matricesData-> rb; k++)
+    for (int k = 0; k < (*matricesData-> rb); k++)
         matrixCElementThread[elementi][elementj] += (*matricesData->matrixA)[elementi][k] * (*matricesData->matrixB)[k][elementj];
 
 }
@@ -206,8 +213,8 @@ int main(int argc, char **argv)
     }
 
     MatricesData matricesData = generateMatricesData(filenames);
-    int ra=matricesData.ra;
-    int cb=matricesData.cb;
+    int ra=*matricesData.ra;
+    int cb=*matricesData.cb;
     pthread_t threads[ra*cb+ra+1]; //each element +each row+whole
     MatricesData matricesDataArr[ra*cb+ra+1];
     matrixCWhole= allocateMatrixC(matricesData);
