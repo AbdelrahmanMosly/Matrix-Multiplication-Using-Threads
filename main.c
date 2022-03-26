@@ -11,7 +11,7 @@ typedef struct matricesData {
     int** matrixA;
     int** matrixB ;
 
-    int threadNumber;
+    int rowToWorkOn;
     int ra;
     int ca;
     int rb;
@@ -140,9 +140,12 @@ void* multiplyWhole(void * arg){
         }
     }
 }
+pthread_mutex_t mutex;
 void* multiplyRow(void * arg){
     MatricesData* matricesData=(MatricesData*) arg;
-    int i=matricesData->threadNumber-1;
+    pthread_mutex_lock(&mutex);
+    int i=matricesData->rowToWorkOn++;
+    pthread_mutex_unlock(&mutex);
     for (int j = 0; j <matricesData-> cb; j++){
         matrixCRowThread[i][j] = 0;
 
@@ -150,7 +153,6 @@ void* multiplyRow(void * arg){
             matrixCRowThread[i][j] += matricesData->matrixA[i][k] * matricesData->matrixB[k][j];
     }
 }
-
 int main(int argc, char **argv)
 {
     if(argc>4)
@@ -182,15 +184,8 @@ int main(int argc, char **argv)
     int threadIndex=0;
     pthread_create(&threads[threadIndex++], NULL, multiplyWhole,(void*)matricesData);
     while (threadIndex<matricesData->ra+1){
-        matricesData->threadNumber=threadIndex;
-        pthread_create(&threads[threadIndex++], NULL, multiplyRow,(void*)matricesData);
-    }/*
-    while (threadIndex<matricesData->ra*matricesData->cb+matricesData->ra+1){
-        matricesData->threadNumber=threadIndex;
         pthread_create(&threads[threadIndex++], NULL, multiplyRow,(void*)matricesData);
     }
-*/
-
 
     threadIndex--;
     while (threadIndex>=0)
