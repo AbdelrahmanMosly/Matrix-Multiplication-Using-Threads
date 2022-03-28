@@ -99,6 +99,8 @@ int** readFromFile(char* filename , int row ,int column) {
 void writeToFile(char* filename,int** matrixC,char* method , int row ,int column) {
     strcat(filename,method);
     FILE *fp = fopen(filename, "w");
+    fprintf(fp,"%s\n",filename);
+    fprintf(fp,"row=%d col=%d\n",row,column);
 
     for (int i = 0; i <row; i++) {
         for (int j = 0; j <column; j++)
@@ -118,12 +120,12 @@ MatricesData generateMatricesData(char** filenames){
     int cb;
     MatricesData matricesData;
 
-    matricesData.matrixA= malloc(sizeof (int **));
-    matricesData.matrixB= malloc(sizeof (int **));
-    matricesData.ra= malloc(sizeof (int ));
-    matricesData.ca= malloc(sizeof (int ));
-    matricesData.rb= malloc(sizeof(int ));
-    matricesData.cb= malloc(sizeof (int ));
+    matricesData.matrixA= (int***)malloc(sizeof (int **));
+    matricesData.matrixB= (int***)malloc(sizeof (int **));
+    matricesData.ra= (int*)malloc(sizeof (int ));
+    matricesData.ca= (int*)malloc(sizeof (int ));
+    matricesData.rb= (int*)malloc(sizeof(int ));
+    matricesData.cb= (int*)malloc(sizeof (int ));
 
     getDimensions(filenames[0],&ra,&ca);
     *matricesData.ra=ra;
@@ -135,6 +137,8 @@ MatricesData generateMatricesData(char** filenames){
     *matricesData.matrixB = readFromFile(filenames[0],rb,cb);
     matricesData.elementToWorkOn=0;
     matricesData.rowToWorkOn=0;
+
+
 
     return matricesData;
 }
@@ -188,7 +192,39 @@ void* multiplyElement(void * arg){
         matrixCElementThread[elementi][elementj] += (*matricesData->matrixA)[elementi][k] * (*matricesData->matrixB)[k][elementj];
 
 }
+clearMemory(char** filenames,MatricesData* matricesData){
 
+    for(int i=0;i<4;i++)
+        free(filenames[i]);
+    free(filenames);
+
+    for (int i = 0; i < *matricesData->ra; i++) {
+        for (int j = 0; j <*matricesData-> ca; j++)
+            free(*matricesData->matrixA[i][j]);
+    }
+    for (int i = 0; i < *matricesData->rb; i++) {
+        for (int j = 0; j <*matricesData-> cb; j++)
+            free(*matricesData->matrixB[i][j]);
+    }
+    for (int i = 0; i < *matricesData->ra; i++) {
+        for (int j = 0; j <*matricesData->cb; j++) {
+            free(matrixCWhole[i][j]);
+            free(matrixCRowThread[i][j]);
+            free(matrixCElementThread[i][j]);
+        }
+    }
+
+
+    free(matricesData->ra);
+    free(matricesData->ca);
+    free(matricesData->cb);
+    free(matricesData->rb);
+    free(matricesData->matrixA);
+    free(matricesData->matrixB);
+    free(matrixCWhole);
+    free(matrixCElementThread);
+    free(matrixCRowThread);
+}
 
 int main(int argc, char **argv)
 {
@@ -211,7 +247,6 @@ int main(int argc, char **argv)
     for(int i=0;i<2;i++){
         strncat(filenames[i],".txt",4);
     }
-
     MatricesData matricesData = generateMatricesData(filenames);
     int ra=*matricesData.ra;
     int cb=*matricesData.cb;
@@ -255,5 +290,38 @@ int main(int argc, char **argv)
     printMatrixC(matrixCRowThread,matricesData);
     printf("results element thread :////////////////////\n");
     printMatrixC(matrixCElementThread,matricesData);
+
+
+        for(int i=0;i<4;i++)
+            free(filenames[i]);
+        free(filenames);
+
+        for(int i=0; i< *matricesData.ra;i++) {
+            free(matricesData.matrixA[0][i]);
+        }
+        free(matricesData.matrixA[0]);
+        free(matricesData.matrixA);
+        for (int i = 0; i < *matricesData.rb; i++) {
+            free(matricesData.matrixB[0][i]);
+        }
+        free(matricesData.matrixB[0]);
+        free(matricesData.matrixB);
+        for (int i = 0; i < *matricesData.ra; i++) {
+            free(matrixCWhole[i]);
+            free(matrixCRowThread[i]);
+            free(matrixCElementThread[i]);
+        }
+
+
+        free(matricesData.ra);
+        free(matricesData.ca);
+        free(matricesData.cb);
+        free(matricesData.rb);
+        free(matrixCWhole);
+        free(matrixCElementThread);
+        free(matrixCRowThread);
+
+
+
     return 0;
 }
