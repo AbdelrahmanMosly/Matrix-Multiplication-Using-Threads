@@ -1,11 +1,8 @@
 #include <stdio.h>
 #include <string.h>
-#include <malloc.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <pthread.h>
-#include <unistd.h>
-
 
 typedef struct matricesData {
     int*** matrixA;
@@ -23,24 +20,32 @@ int** matrixCWhole;
 int** matrixCRowThread;
 int** matrixCElementThread;
 
-
 int getDim(char* str)
 {
     int res = 0;
-    if(str[0]=='-')
-        res = -1;
+    if(str[0]=='-'){
+        printf("dimenstion cant be negative");
+        exit(5);
+    }
     for (int i = 0;str[i] != '\0'; i++) {
         if(isdigit(str[i]))
             res = res * 10 + str[i] - '0';
+        else{
+            printf("string found in the dimensions");
+            exit(6);
+        }
     }
     return res;
 }
 int getElement(char* str){
     int res = 0;
-    for (int i = 0;str[i] != '\0' ; i++) {
+    int i=0;
+    if(str[i]=='-')
+        i++;  //skip negative sign
+    for (;str[i] != '\0' ; i++) {
         if(isdigit(str[i]))
             res = res * 10 + str[i] - '0';
-       else {
+        else {
             printf("data contains string");
             exit(1);
         }
@@ -57,20 +62,18 @@ void getDimensions(char* filename , int* row ,int* column) {
         printf("Error: could not open file %s", filename);
         exit(5);
     }
-    const unsigned MAX_LENGTH = 1024;
-    char buffer[MAX_LENGTH];
-    if(fgets(buffer, MAX_LENGTH, fp)){
-
-        char *token = strtok(buffer, " ");
-        *row= getDim(token);
-
-        token = strtok(NULL, " ");
-        *column= getDim(token);
+    char* rowString= malloc(sizeof (char)*10);
+    char* colString= malloc(sizeof (char)*10);
+    if(fscanf(fp,"row=%s col=%s",rowString,colString)>0){
+        *row= getDim(rowString);
+        *column= getDim(colString);
     }
     else{
         printf("file : %s is empty ",filename);
     }
     fclose(fp);
+    free(rowString);
+    free(colString);
 }
 int** readFromFile(char* filename , int row ,int column) {
     FILE *fp = fopen(filename, "r");
@@ -87,6 +90,9 @@ int** readFromFile(char* filename , int row ,int column) {
         for (int j = 0; j < column; j++) {
             if (fscanf(fp, "%s ", buffer) > 0) {
                 matrix[i][j] = getElement(buffer);
+            }else{
+                printf("dimesnions mismatch data");
+                exit(2);
             }
         }
     }
@@ -111,7 +117,6 @@ void writeToFile(char* filename,int** matrixC,char* method , int row ,int column
 }
 
 
-
 MatricesData generateMatricesData(char** filenames){
 
     int ra;
@@ -134,10 +139,15 @@ MatricesData generateMatricesData(char** filenames){
     getDimensions(filenames[1],&rb,&cb);
     *matricesData.rb=rb;
     *matricesData.cb=cb;
-    *matricesData.matrixB = readFromFile(filenames[0],rb,cb);
+    *matricesData.matrixB = readFromFile(filenames[1],rb,cb);
     matricesData.elementToWorkOn=0;
     matricesData.rowToWorkOn=0;
 
+    if(ca!=rb)
+    {
+        printf("cant multiply these matrices");
+        exit(3);
+    }
 
 
     return matricesData;
@@ -194,24 +204,25 @@ void* multiplyElement(void * arg){
 }
 clearMemory(char** filenames,MatricesData* matricesData){
 
+
     for(int i=0;i<4;i++)
         free(filenames[i]);
     free(filenames);
 
-    for (int i = 0; i < *matricesData->ra; i++) {
-        for (int j = 0; j <*matricesData-> ca; j++)
-            free(*matricesData->matrixA[i][j]);
+    for(int i=0; i< *matricesData->ra;i++) {
+        free(matricesData->matrixA[0][i]);
     }
+    free(matricesData->matrixA[0]);
+    free(matricesData->matrixA);
     for (int i = 0; i < *matricesData->rb; i++) {
-        for (int j = 0; j <*matricesData-> cb; j++)
-            free(*matricesData->matrixB[i][j]);
+        free(matricesData->matrixB[0][i]);
     }
+    free(matricesData->matrixB[0]);
+    free(matricesData->matrixB);
     for (int i = 0; i < *matricesData->ra; i++) {
-        for (int j = 0; j <*matricesData->cb; j++) {
-            free(matrixCWhole[i][j]);
-            free(matrixCRowThread[i][j]);
-            free(matrixCElementThread[i][j]);
-        }
+        free(matrixCWhole[i]);
+        free(matrixCRowThread[i]);
+        free(matrixCElementThread[i]);
     }
 
 
@@ -219,12 +230,21 @@ clearMemory(char** filenames,MatricesData* matricesData){
     free(matricesData->ca);
     free(matricesData->cb);
     free(matricesData->rb);
-    free(matricesData->matrixA);
-    free(matricesData->matrixB);
     free(matrixCWhole);
     free(matrixCElementThread);
     free(matrixCRowThread);
+
+
 }
+void print(MatricesData matricesData){
+    printf("results one thread :////////////////////\n");
+    printMatrixC(matrixCWhole,matricesData);
+    printf("results row thread :////////////////////\n");
+    printMatrixC(matrixCRowThread,matricesData);
+    printf("results element thread :////////////////////\n");
+    printMatrixC(matrixCElementThread,matricesData);
+}
+
 
 int main(int argc, char **argv)
 {
@@ -282,44 +302,9 @@ int main(int argc, char **argv)
     writeToFile(filenames[3],matrixCRowThread ,"_per_row",ra,cb);
     writeToFile(filenames[2],matrixCElementThread ,"_per_element",ra,cb);
 
+    print(matricesData);
 
-
-    printf("results one thread :////////////////////\n");
-    printMatrixC(matrixCWhole,matricesData);
-    printf("results row thread :////////////////////\n");
-    printMatrixC(matrixCRowThread,matricesData);
-    printf("results element thread :////////////////////\n");
-    printMatrixC(matrixCElementThread,matricesData);
-
-
-        for(int i=0;i<4;i++)
-            free(filenames[i]);
-        free(filenames);
-
-        for(int i=0; i< *matricesData.ra;i++) {
-            free(matricesData.matrixA[0][i]);
-        }
-        free(matricesData.matrixA[0]);
-        free(matricesData.matrixA);
-        for (int i = 0; i < *matricesData.rb; i++) {
-            free(matricesData.matrixB[0][i]);
-        }
-        free(matricesData.matrixB[0]);
-        free(matricesData.matrixB);
-        for (int i = 0; i < *matricesData.ra; i++) {
-            free(matrixCWhole[i]);
-            free(matrixCRowThread[i]);
-            free(matrixCElementThread[i]);
-        }
-
-
-        free(matricesData.ra);
-        free(matricesData.ca);
-        free(matricesData.cb);
-        free(matricesData.rb);
-        free(matrixCWhole);
-        free(matrixCElementThread);
-        free(matrixCRowThread);
+    clearMemory(filenames,&matricesData);
 
 
 
