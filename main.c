@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <pthread.h>
+#include <sys/time.h>
 
 typedef struct matricesData {
     int*** matrixA;
@@ -118,7 +119,6 @@ void writeToFile(char* filename,int** matrixC,char* method , int row ,int column
 
 
 MatricesData generateMatricesData(char** filenames){
-
     int ra;
     int ca;
     int rb;
@@ -148,7 +148,6 @@ MatricesData generateMatricesData(char** filenames){
         printf("cant multiply these matrices");
         exit(3);
     }
-
 
     return matricesData;
 }
@@ -244,7 +243,14 @@ void print(MatricesData matricesData){
     printf("results element thread :////////////////////\n");
     printMatrixC(matrixCElementThread,matricesData);
 }
-
+MatricesData* geDataArray(MatricesData matricesData,int size){
+    MatricesData* matricesDataArr= malloc(sizeof (matricesData)*size);
+    for(int i=0;i<size;i++)
+    {
+        matricesDataArr[i]=matricesData;
+    }
+    return matricesDataArr;
+}
 
 int main(int argc, char **argv)
 {
@@ -271,29 +277,59 @@ int main(int argc, char **argv)
     int ra=*matricesData.ra;
     int cb=*matricesData.cb;
     pthread_t threads[ra*cb+ra+1]; //each element +each row+whole
-    MatricesData matricesDataArr[ra*cb+ra+1];
+    MatricesData* matricesDataArr;
     matrixCWhole= allocateMatrixC(matricesData);
     matrixCRowThread= allocateMatrixC(matricesData);
     matrixCElementThread= allocateMatrixC(matricesData);
 
     int threadIndex=0;
-    matricesDataArr[threadIndex]=matricesData;
-    pthread_create(&threads[threadIndex++], NULL, multiplyWhole,(void*)&matricesDataArr[threadIndex]);
+    matricesDataArr=geDataArray(matricesData,ra*cb);
 
-    while (threadIndex<ra+1){
-        matricesDataArr[threadIndex]=matricesData;
+
+    struct timeval stop, start;
+
+    //--per Matrix start
+    gettimeofday(&start, NULL); //start checking time
+    pthread_create(&threads[threadIndex++], NULL, multiplyWhole,(void*)&matricesDataArr[threadIndex]);
+    threadIndex--;
+    while (threadIndex>=0)
+        pthread_join(threads[threadIndex--],NULL);
+    gettimeofday(&stop, NULL); //end checking time
+    printf("Thread per Matrix seconds taken %lu s\n", stop.tv_sec - start.tv_sec);
+    printf("Thread per Matrix Microseconds taken: %lu microseconds\n", stop.tv_usec - start.tv_usec);
+    threadIndex++;
+    //--per Matrix End
+
+    //--per Row start
+    gettimeofday(&start, NULL); //start checking time
+    while (threadIndex<ra){
+        matricesDataArr[threadIndex].rowToWorkOn=threadIndex;
         pthread_create(&threads[threadIndex++], NULL, multiplyRow,(void*)&matricesDataArr[threadIndex]);
-        matricesData.rowToWorkOn++;
-    }
-    matricesData.elementToWorkOn=0;
-    while (threadIndex<ra*cb+ra+1){
-        matricesDataArr[threadIndex]=matricesData;
-        pthread_create(&threads[threadIndex++], NULL, multiplyElement,(void*)&matricesDataArr[threadIndex]);
-        matricesData.elementToWorkOn++;
     }
     threadIndex--;
     while (threadIndex>=0)
         pthread_join(threads[threadIndex--],NULL);
+    gettimeofday(&stop, NULL); //end checking time
+    printf("Thread per Row Seconds taken %lu s\n", stop.tv_sec - start.tv_sec);
+    printf("Thread per Row Microseconds taken: %lu microseconds\n", stop.tv_usec - start.tv_usec);
+    threadIndex++;
+    //--per Row End
+
+    //--perElement start
+    gettimeofday(&start, NULL); //start checking time
+    matricesData.elementToWorkOn=0;
+    while (threadIndex<ra*cb){
+        matricesDataArr[threadIndex].elementToWorkOn=threadIndex;
+        pthread_create(&threads[threadIndex++], NULL, multiplyElement,(void*)&matricesDataArr[threadIndex]);
+    }
+    threadIndex--;
+    while (threadIndex>=0)
+        pthread_join(threads[threadIndex--],NULL);
+    gettimeofday(&stop, NULL); //end checking time
+    printf("Thread per Element Seconds taken %lu s\n", stop.tv_sec - start.tv_sec);
+    printf("Thread per Element Microseconds taken: %lu microseconds\n", stop.tv_usec - start.tv_usec);
+    threadIndex++;
+    //--perElement End
 
 
     strcpy(filenames[3],filenames[2]);
@@ -304,6 +340,7 @@ int main(int argc, char **argv)
 
     print(matricesData);
 
+    free(matricesDataArr);
     clearMemory(filenames,&matricesData);
 
 
