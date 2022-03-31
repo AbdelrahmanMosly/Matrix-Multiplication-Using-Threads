@@ -33,14 +33,14 @@ int getDim(char* str)
     int res = 0;
     if(str[0]=='-'){
         printf("dimenstion cant be negative");
-        exit(5);
+        exit(6);
     }
     for (int i = 0;str[i] != '\0'; i++) {
         if(isdigit(str[i]))
             res = res * 10 + str[i] - '0';
         else{
             printf("string found in the dimensions");
-            exit(6);
+            exit(5);
         }
     }
     return res;
@@ -60,7 +60,7 @@ int getElement(char* str){
             res = res * 10 + str[i] - '0';
         else {
             printf("data contains string");
-            exit(1);
+            exit(4);
         }
     }
     if(str[0]=='-')
@@ -68,7 +68,7 @@ int getElement(char* str){
     return res;
 }
 /**
- * read first line from matrices and seperate row and column and return them
+ * read first line from matrices files and seperate row and column and return them
  * @param filename
  * @param row pointer to change the value of the row
  * @param column pointer to change the value of column
@@ -78,7 +78,7 @@ void getDimensions(char* filename , int* row ,int* column) {
     if (fp == NULL)
     {
         printf("Error: could not open file %s", filename);
-        exit(5);
+        exit(3);
     }
     char* rowString= malloc(sizeof (char)*10);
     char* colString= malloc(sizeof (char)*10);
@@ -88,6 +88,7 @@ void getDimensions(char* filename , int* row ,int* column) {
     }
     else{
         printf("file : %s is empty ",filename);
+        exit(7);
     }
     fclose(fp);
     free(rowString);
@@ -122,7 +123,6 @@ int** readFromFile(char* filename , int row ,int column) {
     }
     fclose(fp);
     return matrix;
-
 }
  /**
  * @param filename prefix of the filenae to be created
@@ -180,7 +180,7 @@ MatricesData generateMatricesData(char** filenames){
     if(ca!=rb)
     {
         printf("cant multiply these matrices");
-        exit(3);
+        exit(1);
     }
 
     return matricesData;
@@ -197,6 +197,19 @@ void printMatrixC(int** matrixC,MatricesData matricesData)
             printf("%d ",matrixC[i][j]);
         printf("\n");
     }
+}
+
+/**
+ * print matrixC using helper function printMatrixC
+ * @param matricesData structure contains data needed to print matrix
+ */
+void printResultMatrices(MatricesData matricesData){
+    printf("results one thread :////////////////////\n");
+    printMatrixC(matrixCWhole,matricesData);
+    printf("results row thread :////////////////////\n");
+    printMatrixC(matrixCRowThread,matricesData);
+    printf("results element thread :////////////////////\n");
+    printMatrixC(matrixCElementThread,matricesData);
 }
 /**
  * @param matricesData structure to get rows and columns to be allocated
@@ -224,6 +237,7 @@ void* multiplyWhole(void * arg){
         }
     }
     free(arg);
+    return NULL;
 
 }
 /**
@@ -241,6 +255,7 @@ void* multiplyRow(void * arg){
     }
 
     free(arg);
+    return NULL;
 }
 /**
  * Function called by thread to multiply each element of the matrix
@@ -257,14 +272,14 @@ void* multiplyElement(void * arg){
         matrixCElementThread[elementi][elementj] += (*matricesData->matrixA)[elementi][k] * (*matricesData->matrixB)[k][elementj];
 
     free(arg);
+    return NULL;
 }
 /**
  *free pointers and free matrices C each thread
  * @param filenames
  * @param matricesData
  */
-clearMemory(char** filenames,MatricesData* matricesData){
-
+void clearMemory(char** filenames,MatricesData* matricesData){
 
     for(int i=0;i<4;i++)
         free(filenames[i]);
@@ -293,20 +308,16 @@ clearMemory(char** filenames,MatricesData* matricesData){
     free(matrixCElementThread);
     free(matrixCRowThread);
 
-
 }
-
 /**
- * print matrixC using helper function printMatrixC
- * @param matricesData structure contains data needed to print matrix
+ * print input file names
+ * @param filenames
  */
-void printResultMatrices(MatricesData matricesData){
-    printf("results one thread :////////////////////\n");
-    printMatrixC(matrixCWhole,matricesData);
-    printf("results row thread :////////////////////\n");
-    printMatrixC(matrixCRowThread,matricesData);
-    printf("results element thread :////////////////////\n");
-    printMatrixC(matrixCElementThread,matricesData);
+void printInputFileNames(char** filenames){
+    printf("Input files:\n");
+    for(int i=0;i<2;i++){
+        printf("\t %s\n",filenames[i]);
+    }
 }
 
 int main(int argc, char **argv)
@@ -314,7 +325,7 @@ int main(int argc, char **argv)
     if(argc>4)
     {
         printf("Error to many arguments");
-        return 1;
+        exit(8);
     }
     char** filenames = malloc(sizeof (char *) *4);
     filenames[0]= malloc(sizeof (char)*128);
@@ -331,6 +342,7 @@ int main(int argc, char **argv)
         strncat(filenames[i],".txt",4);
     }
     MatricesData matricesData = generateMatricesData(filenames);
+    printInputFileNames(filenames);
     int ra=*matricesData.ra;
     int cb=*matricesData.cb;
     pthread_t threads[ra*cb]; //each element +each row+whole
@@ -345,14 +357,11 @@ int main(int argc, char **argv)
     gettimeofday(&start, NULL); //start checking time
     MatricesData* matricesDataPerMatrix= malloc(sizeof (MatricesData));
     *matricesDataPerMatrix=matricesData;
-    pthread_create(&threads[threadIndex++], NULL, multiplyWhole,matricesDataPerMatrix);
-    threadIndex--;
-    while (threadIndex>=0)
-        pthread_join(threads[threadIndex--],NULL);
+    pthread_create(&threads[threadIndex], NULL, multiplyWhole,matricesDataPerMatrix);
+    pthread_join(threads[threadIndex],NULL);
     gettimeofday(&stop, NULL); //end checking time
     printf("Thread per Matrix seconds taken %lu s\n", stop.tv_sec - start.tv_sec);
     printf("Thread per Matrix Microseconds taken: %lu microseconds\n", stop.tv_usec - start.tv_usec);
-    threadIndex++;
     //--per Matrix End
 
     //--per Row start
@@ -390,15 +399,17 @@ int main(int argc, char **argv)
     gettimeofday(&stop, NULL); //end checking time
     printf("Thread per Element Seconds taken %lu s\n", stop.tv_sec - start.tv_sec);
     printf("Thread per Element Microseconds taken: %lu microseconds\n", stop.tv_usec - start.tv_usec);
-    threadIndex++;
+
     //--perElement End
-
-
-    strcpy(filenames[3],filenames[2]);
+    printf("Output files:\n");
+    strcpy(filenames[3],filenames[2]); //reserve the prefix of the result file name
     writeToFile(filenames[2],matrixCWhole ,"matrix",ra,cb);
+    printf("\t %s\n",filenames[2]);
     strcpy(filenames[2],filenames[3]);
     writeToFile(filenames[3],matrixCRowThread ,"row",ra,cb);
+    printf("\t %s\n",filenames[3]);
     writeToFile(filenames[2],matrixCElementThread ,"element",ra,cb);
+    printf("\t %s\n",filenames[2]);
 
    // printResultMatrices(matricesData);
 
